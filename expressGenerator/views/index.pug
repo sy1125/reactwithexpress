@@ -1,0 +1,135 @@
+doctype html
+html(lang="ko")
+  head
+    meta(charset="UTF-8")
+    title Sign Up페이지 (Node, MySQL)
+    style.
+      .user-card { border: 1px solid #ddd; margin: 10px 0; padding: 10px; }
+      .edit-form { display: none; }
+      .button-group { margin-top: 10px; }
+      .button-group button { margin-right: 5px; }
+  body
+    h1 사용자 관리 시스템
+    form#userForm
+      table
+        each field in [{name: 'name', label: '사용자명'}, {name: 'email', label: '이메일'}, {name: 'age', label: '나이', type: 'number'}]
+          tr
+            td
+              label(for=field.name)= field.label
+            td
+              input(type=field.type || 'text', id=field.name, name=field.name, required)
+      button(type="submit") 제출
+
+    #userList
+      h2 등록된 사용자 목록
+       #users
+        if users && users.length > 0
+          each user in users
+            .user-card(id=`user-${user.id}`)
+              .user-info
+                p
+                  strong 이름: 
+                  span= user.name
+                p
+                  strong 이메일: 
+                  span= user.email
+                p
+                  strong 나이: 
+                  span= user.age || "미입력"
+              .button-group
+                button(onclick=`toggleEditForm(${user.id})`) 수정
+                button(onclick=`deleteUser(${user.id})`) 삭제
+              form.edit-form(id=`edit-form-${user.id}`, onsubmit=`updateUser(event, ${user.id})`)
+                input(type="text", name="name", value=user.name, required)
+                input(type="email", name="email", value=user.email, required)
+                input(type="number", name="age", value=user.age || '', required)
+                .button-group
+                  button(type="submit") 저장
+                  button(type="button", onclick=`toggleEditForm(${user.id})`) 취소
+        else
+          p 등록된 사용자가 없습니다.
+      
+    script.
+      const userForm = document.getElementById('userForm');
+      const userList = document.getElementById('users');
+
+      async function fetchUsers() {
+        try {
+          const response = await fetch("/users");
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          const users = await response.json();
+          renderUsers(users);
+        } catch (error) {
+          console.error("사용자 목록을 가져오는 중 오류 발생:", error);
+          userList.innerHTML = `<p style="color: red;">사용자 목록 에러.${error}</p>`;
+        }
+      }
+
+      function renderUsers(users) {
+        if (users.length === 0) {
+          userList.innerHTML = "<p>등록된 사용자가 없습니다.</p>";
+          return;
+        }
+
+        userList.innerHTML = users.map(user => `
+          <div class="user-card" id="user-${user.id}">
+            <div class="user-info">
+              <p><strong>이름:</strong> ${user.name}</p>
+              <p><strong>이메일:</strong> ${user.email}</p>
+              <p><strong>나이:</strong> ${user.age || "미입력"}</p>
+            </div>
+            <div class="button-group">
+              <button onclick="toggleEditForm(${user.id})">수정</button>
+              <button onclick="deleteUser(${user.id})">삭제</button>
+            </div>
+            <form class="edit-form" id="edit-form-${user.id}" onsubmit="updateUser(event, ${user.id})">
+              <input type="text" name="name" value="${user.name}" required>
+              <input type="email" name="email" value="${user.email}" required>
+              <input type="number" name="age" value="${user.age || ''}" required>
+              <div class="button-group">
+                <button type="submit">저장</button>
+                <button type="button" onclick="toggleEditForm(${user.id})">취소</button>
+              </div>
+            </form>
+          </div>
+        `).join("");
+      }
+
+      function toggleEditForm(userId) {
+        const form = document.getElementById(`edit-form-${userId}`);
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+      }
+
+      async function handleFormSubmit(event, url, method) {
+        event.preventDefault();
+        const formData = new FormData(event.target);
+        try {
+          const response = await fetch(url, { method, body: formData });
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          await fetchUsers();
+          if (method === 'POST') event.target.reset();
+        } catch (error) {
+          console.error(`${method} 요청 중 오류 발생:`, error);
+          alert(`${method} 요청 중 오류가 발생했습니다.`);
+        }
+      }
+
+      async function updateUser(event, userId) {
+        await handleFormSubmit(event, `/users/${userId}`, 'PATCH');
+        toggleEditForm(userId);
+      }
+
+      async function deleteUser(userId) {
+        if (!confirm("정말로 이 사용자를 삭제하시겠습니까?")) return;
+        try {
+          const response = await fetch(`/users/${userId}`, { method: 'DELETE' });
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          await fetchUsers();
+        } catch (error) {
+          console.error("사용자 삭제 중 오류 발생:", error);
+          alert("사용자 삭제 중 오류가 발생했습니다.");
+        }
+      }
+
+      userForm.addEventListener('submit', event => handleFormSubmit(event, '/users', 'POST'));
+      window.addEventListener('load', fetchUsers);
